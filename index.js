@@ -1,6 +1,9 @@
 const express = require("express");
 const mysql = require('mysql2');
 const cors = require('cors');
+const bcrypt = require ('bcrypt');
+const jwt = require('jsonwebtoken')
+const auth = require('./authenticate');
 const quizRoutes = require('./quizRoutes');
 const { createConnection } = require("net");
 
@@ -9,20 +12,25 @@ const app = express();
 app.use(cors);
 app.use(express.json());
 app.use('/api/quizzes', quizRoutes);
-
+// DB connection
 const db = mysql.createConnection({
     host: "localhost",
     user: "root",
     password: "",
     database: "capstone"
 })
-//signup
-app.post('/signup', (req, res) => {
+//signup create new user
+app.post('/signup', async(req, res) => {
     const sql = "INSERT INTO login(`name`, `email`, `password`) VALUES(?)";
+      if (users.some(user => user.email === req.body.email)) {
+          const err = new Error('Email Taken!')
+          err.status = 400;
+          throw err;
+      }
     const values = [
         req.body.name,
         req.body.email,
-        req.body.password
+        await bcrypt.hash(req.body.password)
     ]
     db.query(sql, [values], (err, data)=>{
         if(err){
@@ -31,20 +39,50 @@ app.post('/signup', (req, res) => {
         return res.json(data);
     })
 })
-//login
+//login authenticate a current user
 app.post('/login', (req, res) => {
-    const sql = "SELECT * FROM login WHERE `email` = ? AND `password` = ?";
-    db.query(sql, [req.body.email,req.body.password], (err, data)=>{
-        if(err){
-            return res.json("Error");
-        }
-        if(data.length > 0){
-            return res.json("sucess")
-        }else {
-            return res.json('failed')
-        }
-    })
-})
+  const sql = "SELECT * FROM login WHERE `email` = ?";
+  db.query(sql, [req.body.email], async (err, data) => {
+      if (err) {
+          res.status(500).json({
+              status: 'error',
+              message: 'Internal server error',
+          });
+      } else if (data.length === 0) {
+          res.status(400).json({
+              status: 'fail',
+              message: 'User Not Found!',
+          });
+      } else {
+          const user = data[0];
+          try {
+              if (await bcrypt.compare(req.body.password, user.password)) {
+                  const tokenPayload = {
+                      email: user.email,
+                  };
+                  const accessToken = jwt.sign(tokenPayload, 'SECRET');
+                  res.status(201).json({
+                      status: 'success',
+                      message: 'User Logged In!',
+                      data: {
+                          accessToken,
+                      },
+                  });
+              } else {
+                  res.status(400).json({
+                      status: 'fail',
+                      message: 'Wrong Password!',
+                  });
+              }
+          } catch (error) {
+              res.status(500).json({
+                  status: 'error',
+                  message: 'Internal server error',
+              });
+          }
+      }
+  });
+});
 
 // Get a list of available quizzes
 app.get('/api/quizzes', (req, res) => {
