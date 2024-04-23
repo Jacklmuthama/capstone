@@ -1,4 +1,5 @@
 const express = require("express");
+require('dotenv').config();
 const mysql = require('mysql2');
 const cors = require('cors');
 const bcrypt = require ('bcrypt');
@@ -14,11 +15,12 @@ app.use(express.json());
 app.use('/api/quizzes', quizRoutes);
 // DB connection
 const db = mysql.createConnection({
-    host: "localhost",
-    user: "root",
-    password: "",
-    database: "capstone"
+    host: process.env.MSQL_HOST,
+    user: process.env.MYSQL_USER,
+    password: process.env.MYSQL_PASSWORD,
+    database: process.env.MYSQL_DATABASE_NAME
 })
+console.log(process.env.MSQL_HOST)
 //signup create new user
 app.post('/signup', async(req, res) => {
     const sql = "INSERT INTO login(`name`, `email`, `password`) VALUES(?)";
